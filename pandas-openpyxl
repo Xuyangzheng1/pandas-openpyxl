@@ -1,0 +1,65 @@
+import pandas as pd
+
+
+df = pd.read_excel(r"F:\pandas\参数indexcol\indexcoltest.xlsx", index_col='test3')
+
+# 输出读取的数据
+print(df)
+import openpyxl
+from win32com.client import Dispatch
+from pathlib import Path
+import os
+
+# 拆分所有的合并单元格，并赋予合并之前的值。
+# 由于openpyxl并没有提供拆分并填充的方法，所以使用该方法进行完成
+def unmerge_and_fill_cells(worksheet):
+    all_merged_cell_ranges = list(worksheet.merged_cells.ranges)
+
+    for merged_cell_range in all_merged_cell_ranges:
+        merged_cell = merged_cell_range.start_cell
+        worksheet.unmerge_cells(range_string=merged_cell_range.coord)
+
+        for row_index, col_index in merged_cell_range.cells:
+            cell = worksheet.cell(row=row_index, column=col_index)
+            cell.value = merged_cell.value
+
+# 读取原始xlsx文件，拆分并填充单元格，然后生成中间临时文件。
+def unmerge_cell(filename):
+    try:
+        # 加载Excel工作簿
+        wb = openpyxl.load_workbook(filename)
+
+        # 遍历所有工作表
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            unmerge_and_fill_cells(sheet)
+
+        # 构造新的文件名，添加_temp到文件名中
+        base_filename, ext = os.path.splitext(filename)
+        new_filename = f"{base_filename}_temp{ext}"
+        
+        # 保存修改后的工作簿
+        wb.save(new_filename)
+        wb.close()
+
+        # 使用win32com.client打开Excel，解决pandas读取可能的公式问题
+        xlApp = Dispatch("Excel.Application")
+        xlApp.Visible = False
+        xlBook = xlApp.Workbooks.Open(str(Path(".").absolute() / new_filename))
+        xlBook.Save()
+        xlBook.Close()
+        xlApp.Quit()
+
+        # 返回新的文件名
+        return new_filename
+    except Exception as e:
+        print(f"错误: {e}")
+        return None
+
+if __name__ == '__main__':
+    # 调用函数处理Excel文件
+    result_filename = unmerge_cell(r"F:\pandas\参数indexcol\indexcoltest.xlsx")
+
+    # 打印处理后的文件名
+    if result_filename:
+        print(f"修改后的文件已保存为: {result_filename}")
